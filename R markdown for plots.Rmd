@@ -1,0 +1,964 @@
+---
+title: "Figures to visualize differential gene expression results results"
+owner: "Luna-Velez-lab"
+output: html_document
+date: "Documented 27-07-2023"
+---
+#----------------#
+## Introduction ##
+#----------------#
+This is an R Markdown file containing examples of basics code lines for creating different plots for data visualization. There are many packages available for creating the same type of plot, for each plot we show an example of which package you could use.
+The plots explained in this markdown file are: 
+- vulcano plot = scatter plot that helps identifying genes with a large fold changes that are statistical significant  
+- venn diagram = visualizes the logical relation between sets of data (2 or 3) 
+- upset plot = visualizing the logical relation between > 3 intersecting data sets
+- heatmap = visualizing an data matrix where each value is translated into a color 
+- correlation heatmap = visualizes the correlation between samples based on a specific numerical variable 
+- survival plot = models the time until an even occurs, compares the time-to-event between different groups or how time-to-event correlates with quantitative variables 
+- pca plot = visualizes the clustering of samples based on their similarity making use of principal components to reduce the dimensionality of the datasets
+
+- General introduction to creating graphics using ggplot2
+- bubble plot = scatter plot with an added third dimension or even a forth dimension by assigning a data variable to the dot size and dot color
+- bar plot = visualizes categorical data using rectangular bars with heights or lengths proportional to the values they represent
+- box plot = graphically summarizes a set of data by displaying the minimum, first quartile, median third quartile and maximum as well as possible outliers 
+
+- using color palettes 
+
+When you want to create any of these plots for your own analysis you will need to change parts of the code to make it fit to your data.
+This include: 
+- Changing file/folder paths 
+- Changing file names 
+- Modifying manually set thresholds so they make sense for your data (e.g. filtering out low-expression genes)
+- possibly making different decisions along the way based on your data and your preferences 
+- Updating functions when necessary, as they might be deprecated when you use a newer version of a package
+
+#--------------------------------#
+## Installing required packages ##
+#--------------------------------#
+The specific required packages needed for each plot are specified in that plots code chunk 
+Here we have written down some general remarks for installing packages
+```{r , iclude=FALSE}
+# When working with R in Linux, installing packages directly in R can sometimes cause problems. To work around this you can install the required packages in the environment you are running R in
+# This can for example be done using a .yaml file
+# When working with R in your own computer the packages can be directly installed in R using the code below
+
+### Installing the important repositories
+# This should be done once 
+# BiocManager can help you download packages:
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# If packages are not yet installed, install them using biocManager::install () or install.packages()
+# The packages only need to be installed once and can be activated by running the library function
+```
+
+#---------------#
+## Vulcano plot ##
+#---------------#
+A vulcano plot is a scatter plot that shows the statistical significance (p value/ padj value) versus the biological effect (fold change) of each genes. 
+This enables quick identification of genes with a large fold changes which are also statistical significant. 
+```{r vulcano}
+### Load the required packages
+#BiocManager::install('EnhancedVolcano')
+library(EnhancedVolcano)  # A package that can create a vulcanoplot
+library(tidyr) # A package that contains functions that can be used to manipulate and rearrange the the data
+
+
+### Load the input data
+# This should be a table where the rows are the the gene names and there are at least two columns
+# One columns with the adujusted P-/P-value and one with the fold change (for example the DESeq2 results output)
+vulcano_data <- read.table("/path/to/datafile.txt", sep="\t", header=T) # or an excel, .tsv,  .csv or other file 
+
+### specify the information needed to run the EnhancedVolcano() function
+FCcutoff_choice = 2 # Set the fold change cutoff 
+pCutoff_choice = 0.01 # Set the p/p-adjusted value threshold 
+FoldChange_axis = "log2FoldChange_column" # specify the name of the column in vulcano_data containing the fold change information
+Pvalue_axis= "padj_column" # specify the name of the column in vulcano_data containing the p/ p-adjusted value information
+
+EnhancedVolcano(vulcano_data,
+                lab = rownames(vulcano_data),
+                #selectLab = c("gene_name1", "gene_name2") #**
+                FCcutoff = FCcutoff_choice,
+                pCutoff = pCutoff_choice,
+                x = log2FoldChange_axis,
+                y = Pvalue_axis
+)
+
+# **
+# By default all the genes that pass the fold change and p value cutoff will be labeled 
+# IF you wish to only label key variables/variables of interest You can supply a vector containing the names of these genes to the 'selectLab' argument
+# ! The gene names in the vector need to be present in the rownames(vulcano data) that you supplied to the "lab" argument
+# ! Still only the genes that pass both the fold change and p value cutoff will be labeled 
+
+
+
+### You can color the dots (genes) in the vulcanoplot based on criteria that you specify 
+# In the example below I want to use the default colors but additionally I want to be able to highlight genes of interest yellow 
+# Set criteria for the genes and which color they shoudl get if they meet the criteria 
+
+name_int <- c("Onecut2", "Lgr5") # Specifying the genes of interest to highlight
+
+# Make the gene yellow if it is present in the list of specified genes of interest 
+keyvals <- ifelse( rownames(data) %in% name_int, "yellow",
+                   # Make the gene red if it has a pvalue < pCutoff_choice and  a fold change > FCcutoff_choice 
+                   ifelse((data[log2FoldChange_axis]< -(FCcutoff_choice) & data[Pvalue_axis] < pCutoff_choice) | (data[log2FoldChange_axis]> FCcutoff_choice & data[Pvalue_axis] < pCutoff_choice), 'red2',
+                          # Make the gene blue if it only has a pvalue < pCutoff_choice 
+                          ifelse((-(FCcutoff_choice)< data[log2FoldChange_axis] & data[Pvalue_axis]< pCutoff_choice | data[log2FoldChange_axis]<FCcutoff_choice & data[Pvalue_axis]< pCutoff_choice ), "royalblue",
+                                 # Make the gene green if it only has a fold change > FCcutoff_choice 
+                                 # When a gene doesn't meet any of the criteria set, make the gene grey
+                                 ifelse((data[log2FoldChange_axis]  < -(FCcutoff_choice) & data[Pvalue_axis] > pCutoff_choice  | data[log2FoldChange_axis]> FCcutoff_choice ) & data[Pvalue_axis] > pCutoff_choice , "forestgreen","grey30")))) 
+# If there are any NA values in the keyvals vector make them grey
+keyvals[is.na(keyvals)] <- 'grey30'
+                             
+# Assigning a name to each color for the EnhancedVulcano() unction to be able to create a plot legend with the correct names 
+names(keyvals)[keyvals == 'yellow'] <- 'Gene(s) of interest'
+names(keyvals)[keyvals == 'red2'] <- 'p-value and log2FC'
+names(keyvals)[keyvals == 'royalblue'] <- 'p-value'
+names(keyvals)[keyvals == 'forestgreen'] <- 'log2FC'
+names(keyvals)[keyvals == 'grey30'] <- 'NS' 
+
+EnhancedVolcano(vulcano_data,
+                lab = rownames(vulcano_data),
+                FCcutoff = FCcutoff_choice,
+                pCutoff = pCutoff_choice,
+                x = log2FoldChange_axis , 
+                y = Pvalue_axis, 
+                colCustom = keyvals 
+)
+
+
+### If you want to customize the vulcanoplot even more 
+# For example changing the opacity or shapes of the dot
+# You can take a look at this vignette = 
+#<https://bioconductor.org/packages/release/bioc/vignettes/EnhancedVolcano/inst/doc/EnhancedVolcano.html>
+
+
+
+```
+
+#----------------#
+## Venn diagram ##
+#----------------#
+A Venn diagram is a graphical visualization of the logical relation between sets of data (2 or 3 sets).
+You can for example use this plot when you want to visualize the number of genes that overlap between different gene sets. 
+```{r venn diagram}
+### Load the required packages
+#install.packages('VennDiagram')
+library(VennDiagram)
+
+
+### Create a list of the different sets you want to compare
+# A set can for example be a column in a data frame, a list that you created or the row names of a data frame
+# Column in a data frame
+geneset1 <- read.table('/path/to/datatable.txt', sep="\t", header=T)# or an excel, .tsv, or .csv file 
+geneset1 <- geneset1$column_name
+# List with named vectors 
+geneset2 <- c("LGR5", "ZEB1", "KRT4", "P53" )
+# Row names of a data frame
+geneset3 <- read.table('/path/to/datatable_2.txt',sep="\t", header=T, row.names = 1) # or an excel, .tsv, or .csv file 
+geneset3 <- rownams(geneset3)
+
+sets_list <- list(geneset1, geneset2, geneset3)
+
+### Creating the venn diagram 
+# When running the venn.diagram function the output will be a pdf of the venn diagram in the saved in te current working directory 
+# You need to specify the list containing the sets of interest, the names of the sets in the same order as they are in the list 
+# and the name for the pdf file that will be created  
+venn.diagram(
+    x = sets_list, 
+    category.names = c("Geneset_1" , "Geneset_2", "Geneset_3"),
+    filename = 'venn_diagramm_genset1_geneset2_geneset3.png',
+    output=TRUE
+)
+
+# When you don't want to crate a pdf directly 
+# You can use the The display_venn() function below, this will visualize the venn diagram directly in R
+display_venn <- function(x, ...){
+  grid.newpage()
+  venn_object <- venn.diagram(x, filename=NULL, ...)
+  grid.draw(venn_object)
+}
+
+display_venn(
+    x = sets_list, 
+    category.names = c("Geneset_1" , "Geneset_2", "Geneset_3"),
+)
+
+### Customizing the venn diagram 
+# The venn.diagram allows for customizing the circles the names of the sets and the numerical values in the circles 
+# See <https://www.rdocumentation.org/packages/VennDiagram/versions/1.7.3/topics/venn.diagram> for even more custumizaion options
+
+display_venn(sets_list,  
+             category.names = c("Geneset_1" , "Geneset_2", 'Geneset_3'),
+             
+             # Output figure 
+             height = 600 , # Height of output figure in units 
+             width = 600 , # Width output figure in units 
+             resolution = 500, # Resolution
+             
+             # Circles
+             lwd = 2, # Width of the circle's circumference 
+             lty = 'blank', # Dash patern of each circl's circumfence (numerical "blank" means no dash pattern)
+             fill = c( alpha("#009E73", 0.3), alpha( "#E69F00", 0.3) , alpha("#52B2BF", 0.3)), # olors of each circle's area and their opacity using the alpha function
+             col = c( "#014a36", "#916403", "#0d525c"), # color of each circle's border 
+             
+             # Numbers
+             cex = .8, # Size of the numbers in the circle's
+             fontface = "bold", # Fontface of each number
+             fontfamily = "sans", # Fontfamily of each number
+             
+             # Set names
+             cat.cex = 0.8, # Size fo each set name
+             cat.fontface = "bold", # Fontface of each set's name
+             cat.default.pos = "outer", # Specifying the default location of the set names
+             cat.fontfamily = "sans") # Fontfamily of each set's name
+```
+
+
+#-------------#
+## UpSetplot ##
+#-------------#
+Similar to venn diagram the UpSetplot is a graphical visualization of the logical relation between sets of data. The UpSetplot however can be used for visualizing > 3 intersecting data sets. Additionally it also shows the sizes of the different sets of data 
+```{r upset} 
+### Load the required packages
+#install.packages("UpSetR")
+
+library(UpSetR)
+
+### Create the input data
+# There are three type of data formats that the upset() function can use to create an UpSetplot
+# (1) a list of named vectors 
+# (2) A binary matrix where the  rows are elements (for example genes) and the columns the different sets of data. A 0 indicates an element is not present in a set and an 1 indicates the element is present in the set.
+# (3) A list of vectors where each vector is named after a set or the intersection of sets (separated by an "&" ) , the value of each vector is a number indicting the number of elements belonging to that intersection
+
+listInput <- list(one = c("a", "b" , "c", "e", "g", "h" , "i", "j", "l"), two = c("a", "b", "d" , "e", "j" ), three = c("a", "e","f", "g", "h", "i", "j", "k", "l"))
+
+datamatrix_Input <-  as.data.frame(list(one= c(1, 1, 1, 0, 1, 0, 1, 1, 1, 1,0, 1),
+             two = c(1, 1, 0, 1, 1, 0,0,0,0,1,0,0,),
+             three = c(1,0,0,0,1,1,1,1,1,1,1,1)))
+rownames(datamatrix_Input)  <- c("a", 'b', "c", "d" ,"e","f", "g", "h", "i", "j", "k", "l")
+
+numberInput <- c(one = 2, two = 1, three = 2, `one&two` = 1, `one&three` = 4, 
+                     `two&three` = 1, `one&two&three` = 2)
+
+### Create the UpSetplot 
+# Use the upset() function to create the UpSetplot
+# Use the correct notation out of the three option depending on your type of input data
+# ! note that all inputs contain the same data 
+upset(fromList(listInput))
+upset(datamatrix_Input)
+upset(fromExpression(numberInput))
+ 
+### Cutomzing the UpSetplot 
+upset(datamatrix_Input, 
+      nsets = 2, # slecting the n largest sets to plot
+      numer.angles = 30 , # angel of the numbers above the intersection size bars
+      point.size = 3.5 , # size of the dots
+      line.size = 2, # size of the lines connecting the dots 
+      mainbar.y.label= "Set Intersections", 
+      sets.x.label = "letters per set" ,
+      text.scale = c(1.3, 1.3, 1, 1, 2, 0.75)) # scaling of the labels and text, either a universal number or a vector where the order corresponds to c(intersection size title, intersection size tick labels, set size title, set size tick labels, set names, numbers above bars)
+      
+### If you want to further customize the UpSetplot 
+# you can take alook a these vignettes
+#<https://cran.r-project.org/web/packages/UpSetR/vignettes/basic.usage.html>
+# <https://cran.r-project.org/web/packages/UpSetR/vignettes/queries.html>
+ 
+```
+ 
+ 
+#-----------#
+## Heatmap ##
+#-----------#
+A heatmap is a graphical representation of a data matrix where individual values are represented by color
+```{r heatmap }
+### Load the required packages
+#Biocmanager::install("ComplexHeatmap")
+
+library(ComplexHeatmap) # a packages to create a heatmap
+library(circlize) # a package to get customized color schemes
+library(RColorBrewer) # a package to get cotomized color schemes
+
+### Upload the data
+# This should be a matrix with column names and row names 
+table_for_heamtap<- read.table('/path/to/datafile.txt',sep="\t", header=T, row.names = 1) # or an excel, .tsv, .csv or other file 
+matrix_for_heatmap <- as.matrix(table_for_heamtap)
+# randomly generated example matrix
+set.seed(120)
+matrix_for_heatmap<-matrix(runif(100),nrow=10)
+colnames(matrix_for_heatmap) <- c(11:20)
+rownames(matrix_for_heatmap) <- c(1:10)
+
+### Create the heatmap
+# Use the Heatmap() function 
+# Without any additional argument it will create a heatmap with default settings (including dendograms, row/column names and a legend)
+Heatmap(matrix_for_heatmap)
+
+# Often times scaling the data (z-transformation) across samples, using the scale() function makes for nicer figures 
+# The scale() function scales the columns, so to allow for scaling across samples the matrix needs to be transposed
+# After the transformation the table is transposed back  
+Heatmap(t(scale(t(matrix_for_heatmap))))
+
+### Customizing the heatmap 
+# The ComplexHeatmap package allows for the full customization of the heatmap 
+# See their elaborate documentation for all customization options <https://jokergoo.github.io/ComplexHeatmap-reference/book/a-single-heatmap.html>
+# A few of the possible options are shown below
+
+### Changing the color scheme of the heatmap
+# The colorRamp2() function from circlize package can be used for this 
+# It generates a color mapping from a vector of break values and a vector of corresponding colors 
+colors_heatmap_1= colorRamp2(c(-2, 0, 2), c("yellow", "white", "darkblue")) 
+colors_heatmap_2= colorRamp2(c(-2, 0, 2), c("#000004", "#57106e", "#bc3754", "#f98e09", "#fcffa4")) 
+# Or the RColorBrewer package which contains ready to use color palettes 
+display.brewer.all(colorblindFriendly = TRUE)   
+colors_heatmap_3=brewer.pal(5,"PRGn")
+
+### Adding row and/or column annotations 
+# ComplexHeatmap has options for continuous, discrete but also dot, line, box and barplot annotations (see documentation)
+# To link the annotations to the row/columns of the heatmap you need a table where the row names correspond to the matrix_for_matrix row names or column names (=metadata table)
+# The metadata for the example below is randomly generated 
+column_metadata_table <- data.frame( column_names= colnames(matrix_for_heatmap), col_annotation = runif(10), col_annotation_2 = sample(letters[5:8], 10, replace = TRUE))
+rownames(column_metadata_table) <- column_metadata_table$column_names
+row_metadata_table <- data.frame( row_names= rownames(matrix_for_heatmap), row_annotation = sample(letters[1:3], 10, replace = TRUE))
+rownames(row_metadata_table) <- row_metadata_table$row_names
+# Next you need to create a HeatmapAnnotation object 
+# ! functions for column an row annotation are different, HeatmapAnnotation() and rowAnnotation() respecitively
+# input should be a dtatframe only contaiign the columns which you watn to usd for the annotation 
+# With the "col" argument you can set the colors used for the annotations, otherwise random colors will be assigned
+col_cont = colorRamp2(c(0, 0.5, 1), c("magenta", "white", "darkorange")) 
+col_desc = c("e"="pink", "f"="lightyellow", "g"="lightblue", "h"="lightgreen")
+column_annotation = HeatmapAnnotation(df= column_metadata_table[,c(2:3)], col = list(col_annotation= col_cont, col_annotation_2=col_desc) )
+row_annotation = rowAnnotation(df = row_metadata_table[,2, drop= FALSE] )
+
+
+Heatmap(matrix_for_heatmap, 
+        show_row_dend = TRUE, # show_column_dend 
+        show_row_names = TRUE, # show_column_names
+        col= colors_heatmap_3 , # specifying the color scheme
+        name = "legend_name", 
+        column_names_gp = grid::gpar(fontsize = 8), #row_names_gp, size of the column/row names
+        top_annotation = column_annotation, #bottom_annotation, using the argument to determine location of the annotation
+        right_annotation = row_annotation) #left_annotation, using the argument to determine location of the annotation
+
+
+
+### Adding rowclusters to your heatmap
+# You can cluster the rows using kmeans, which is a method where clusers are defined so that the total intra-cluster variation (known as total within-cluster variation) is minimized
+# First create a plot to see the number of rowclusters that would add information to your data, as input use the same matrix as used for the 
+# This is similar to an similar to an elbowplot
+# The place where the elbow lands (=where the curve is located) is the threshold for the number of rowclusters that best explains the the data variance
+matrix_for_heatmap_kmean<-matrix(runif(625),nrow=25)# randomly generated example matrix
+
+wss <- (nrow(matrix_for_heatmap_kmean)-1)*sum(apply(matrix_for_heatmap_kmean,2,var))
+for (i in 2:20) wss[i] <- sum(kmeans(matrix_for_heatmap_kmean,centers=i)$withinss) #Change the i range depending on the number of rows in the matrix
+plot(1:20, wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
+# In the kmeans function specify the identified rowcluster number that best explains th data variance 
+km <- kmeans(t(scale(t(matrix_for_heatmap_kmean))), centers =  5, iter.max=100, nstart=25)
+
+# Create the heatmap, but use the gene clusters saved in the km object to split the rows and create the rowclusters
+Heatmap(t(scale(t(matrix_for_heatmap_kmean))), split = paste0("km", km$cluster))
+
+```
+
+#-----------------------#
+## Correlation heatmap ##
+#-----------------------#
+Correlation heatmap shows the correlation between samples based on a numerical variable 
+```{r}
+### Load the required packages
+#install.packages("CoplexHeatmap")
+library(ComplexHeatmap)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+
+
+### Upload the data
+# This should be a data frame with multiple rows and multiple columns, but only one numeric variable 
+input_data<- read.table('/path/to/datafile.txt',sep="\t", header=T) # or an excel, .tsv, .csv or other file 
+# Example of such a data frame
+input_data<-data.frame(genes = c('GENE1', 'GENE2', 'GENE3',
+                                   'GENE4','GENE5'),
+                           Sample_1_r1 =c(1.2690,2.3462,3.4898,4.3693,5.1236),
+                           Sample_1_r2 =c(0.5356,3.3460,3.3577,4.3688,5.4371),
+                           Sample_2_r1 =c(3.0082,5.4990,3.2634,5.5371,5.6368),
+                           Sample_2_r2 =c(3.6594,4.8532,3.2356,5.9435,5.6477))
+rownames(input_data) <- input_data$genes
+input_data <- input_data[,-c(1)]
+### create the correlation matrix 
+# The cor() function will return a matrix containing the correlation coefficent for each pairwise comparision
+# With the "method"argument you can specify which correlation coefficient is computed = "pearson"(default), "kendall" or "spearman"
+correlation_matrix <- cor(input_data, method="pearson")
+
+### create the correlation heatmap
+# using the Heatmap() function from ComplexHeatmap package
+# For any costumization options check out the code chunk for heatmaps 
+Heatmap(correlation_matrix )
+
+### Visualizing the average correlation value of comparisons of interest
+# First determine for each sample of interest the corresponding columns (replicates)
+# The sample names in the samples_of_interest vector should correspond to (or be part of) the column names of the matrix 
+samples_of_interest <- c("Sample_1", "Sample_2")
+column_positions <- NULL
+for( name in samples_of_interest) { 
+  positions <-grep(pattern= name, colnames(correlation_matrix))
+  column_positions <- append( column_positions, positions)
+}
+# Subset the matrix and remove the duplicated values by oly selcting the upper trianglur matrix 
+# Column positions are the same as the row positions in a correlatioan matrix 
+correlation_matrix_subset <- as.data.frame(correlation_matrix[column_positions, column_positions])
+get_upper_tri <- function(x){
+  x[lower.tri(x)]<- NA 
+  return(x)
+  }
+Upper_tri <- get_upper_tri(correlation_matrix_subset)
+# Elongate the matrix using the pivot_longer function from tidyr
+# pivot_longer(data, c(column to include in column names column), names_to = "name_of_new_column_names_column", values_to = "name_of_new values_column")
+# Instead of columns to include, you can also specify the column name(s) to exclude in the column names column, see example -c("row_samples)
+# Finally remove the rows with NA values
+Upper_tri$row_samples <- rownames(Upper_tri)
+long_tri <- pivot_longer(Upper_tri, -c(row_samples) , names_to = "column_samples", values_to= "correlation_value")
+long_tri_final <- na.omit(long_tri )
+# Determine the average correlation coefficient per comparison
+# Making sure the replicates have teh same name -> changing the sample names to "Sample_1" and "Sample_2"
+long_tri_final$row_samples <- gsub("_r[1-9]", "", long_tri_final$row_samples ) 
+long_tri_final$column_samples<- gsub("_r[1-9]", "", long_tri_final$column_samples)
+long_tri_final$comparison<- paste0(long_tri_final$row_samples , "_vs_", long_tri_final$column_samples ) 
+summarized_long_tri<-  long_tri_final %>% group_by(comparison) %>% summarize(mean = mean(correlation_value), sd(correlation_value))
+# Visualize the average correlation coefficients using ggplot
+# For any customization options check 
+ggplot(summarized_long_tri, aes(x= comparison , y = mean)) +
+  geom_bar(stat = "identity", position = position_dodge())+
+  geom_errorbar(aes( ymin=mean-`sd(correlation_value)`, ymax=mean+`sd(correlation_value)`), width=.2,
+                 position=position_dodge(.9))+
+  ylab("Average correlation coefficient") # Specifying the y-axis label 
+
+
+```
+#-----------------#
+## survival plot ##
+#-----------------#
+A survival plot models the time until an even occurs, compares th time-to-event between different groups or how time-to-event correlates with quantitative variables 
+```{r}
+### Load the required packages
+#install.packages("ggplot2")
+install.packages("survival")
+install.packages("survminer")
+install.packages("Hmisc")
+library(dplyr)
+library(survival) # fit survival curves
+library(survminer) # create nice survival plots
+library(Hmisc)
+
+### Upload the data
+# This should be a data frame containing a column with patient IDs, a column with survival time (in days or months) a column with vital status (0=alive 1=death) and a column containing the factor you wish to study (gene expression, drug dosage, etc.)  
+# Additional columns with metadata can be used for assessing factor contribution within groups (gender, mutation status, age etc)
+survival_data<- read.table('/path/to/datafile.txt',sep="\t", header=T) # or an excel, .tsv, .csv or other file 
+# Example of this data frame : the lung cancer dataset (1) that has been added to the survival package 
+# (1) Loprinzi CL, Laurie JA, Wieand HS, Krook JE, Novotny PJ, Kugler JW, Bartel J, Law M, Bateman M, Klatt NE, et al. Prospective evaluation of prognostic variables from patient-completed questionnaires. North Central Cancer Treatment Group. J Clin Oncol. 1994 Mar;12(3):601-7. doi: 10.1200/JCO.1994.12.3.601. PMID: 8120560.
+head(lung)  
+survival_data <- lung
+
+### fit a survival curve
+# First create a survival object using the surv() function indicating the survival time and the vital status 
+s <- Surv(survival_data$time, survival_data$status)
+# Followed by creating the survival curve (kaplan_Meier Curve), using the survival object as the response variable in a model formula
+# 1. Without considering any groupings
+sfit <- survfit(s~ 1,  data= survival_data)
+# 2. Fitting survival curves for different categorical groups separately (man vs woman in the example below) 
+sfit <- survfit(s~ sex,  data= survival_data)
+range(survival_data$time) # Check the range of the survival time points
+summary(sfit, times=seq(0,1000,100)) # set specific intervals to visualize in the summary table  
+# 3. Fitting survival curves for continuous variables (age int he example below)
+# will create a separate curve for every unique value
+# Therefore continuous variable need to be categorized into different groups ->  for example quantiles
+# With the prob argument you can specify which quantiles you want (values be between 0 and 1) 
+# In the example below 6 quantiles (between 0 and 1 ) are specified 
+range(survival_data$age)
+survival_data$quantil = as.numeric(cut(survival_data$age, quantile(survival_data$age,  prob= seq(0,1, length =6), type= 5 )))
+sfit2 <- survfit(s~ quantil ,  data= survival_data)
+summary(sfit2) # shows a summary table, patients that are still alive don't end up in the plot
+
+### Create the survival plot
+plot(sfit)
+plot(sfit2)
+
+### customizing the survival plot 
+# using the ggsurvplot() function from survminerpackage
+# A few options are shown below
+# For any very specific customization wishes look at the documentations online : http://rpkgs.datanovia.com/survminer/reference/ggsurvplot.html
+ggsurvplot(sfit, 
+           conf.int = TRUE, # show confident interval
+           pval=TRUE,  # show p-value of the log-rank test
+           risk.table=TRUE, # show the risk table 
+           legend.labs=c("man", "woman"), #set the legend labels
+           legend.title = "Gender", # set the legend titel
+           palette=c("dodgerblue2", "orchid2"), # customized color palaet
+           title= "Kaplan-Meier Curve for survial of lung cancer patients ", #plot titles
+           risk.table.height=.15) #set height of risk plot
+
+ggsurvplot(sfit2, 
+           conf.int = FALSE, # show confident interval
+           pval=TRUE,
+           risk.table=TRUE,
+           legend.labs = c("Quantil 1", "Quantil 2", "Quantil 3", "Quantil 4", "Quantil 5"),
+           legen.title = "quantils",
+           surv.median.line = "hv", # drawing horizontal("h")/vertical("v") line at median survival or "none"
+           break.time.by = 500, # numerical value controling time axis breaks 
+           risk.table.height = 0.25) 
+
+### Plotting multiple sfit objects 
+# creating a list of sfit objects and use the ggsurplot_list() function to plot the different survival plots
+variables_of_interest <-colnames( survival_data) # collect column names of the variables in the dataframe that you want to plot 
+output_list<- list()
+for(name in variables_of_interest){
+  variable<- survival_data[[name]]
+  sfit<- survfit(Surv(time, status) ~ variable , data = survival_data) # fit survival curve for the variable
+  sfit[["call"]][["formula"]][[3]] <- as.symbol(name)
+  output_list[[name]] <-sfit # output named list 
+}
+
+# Extract the p value of each survival curve in the list
+pval_table<-surv_pvalue(output_list, combine=TRUE)
+# Plot the survival curves 
+ggsurvplot_list(output_list, survival_data, legend.title = names(output_list), pval=TRUE)
+
+```
+
+#------------#
+## PCA plot ##
+#------------#
+A PCA plot shows the clustering of samples based on their similarity making use of principal components to reduce the dimensionality of the datasets
+```{r}
+### Load the required packages
+#install.packages("factoextra")
+#install.packages("ggfortify")
+
+library(stats)
+library(factoextra)
+
+
+
+### Upload the data
+# This should be a data frame where each row represents a different sample/individual
+pca_data<- read.table('/path/to/datafile.txt',sep="\t", header=T) # or an excel, .tsv, .csv or other file 
+# Examples of such a data frame
+# (1) data fame with only one variable 
+pca_data_1<-data.frame(genes = c('GENE1', 'GENE2', 'GENE3',
+                                   'GENE4','GENE5'),
+                           Sample_1_r1 =c(1.2690,2.3462,3.4898,4.3693,5.1236),
+                           Sample_1_r2 =c(0.5356,3.3460,3.3577,4.3688,5.4371),
+                           Sample_2_r1 =c(3.0082,5.4990,3.2634,5.5371,5.6368),
+                           Sample_2_r2 =c(3.6594,4.8532,3.2356,5.9435,5.6477))
+rownames(pca_data_1) <- pca_data_1$genes
+pca_data_1 <- pca_data_1[,-1]
+pca_data_1 <- data.frame(t(pca_data_1)) # The data frame need to be transposed so the samples are on the rows
+# (2) data fame with multiple variables
+pca_data_2 <- as.data.frame(list(patients = c("patient_1","patient_2","patient_3","patient_4","patient_5","patient_6","patient_7"),
+                   distance_to_hospital_in_km = c( 8.7, 20.3, 17.5, 2.7, 35.4, 12.5, 15.0),
+                   age =c(29,	53,	47,	63,	83,	37,	57),
+                   hight_in_cm = c(166, 178, 159, 187, 173, 169, 172 ),
+                   weight_in_kg =c(67,73,58,80,75,64,60 ),
+                   treatment= c("radiation",	"chemo",	"immuno",	"immuno",	"chemo",	"chemo",	"immuno")))
+
+rownames(pca_data_2) <- pca_data_2$patients 
+pca_data_2<- pca_data_2[,-1]
+
+
+### Perform principal component analysis 
+# prcomp() only works on numeric values, so columns with categorical values (the treatment column in the example) need to be removed
+# and plot the percentage of explaned variance per PC to determine which PCs account for the most variability in the data
+# If the data is not yet centered or scaled you can set center and/or scale parameter to TRUE 
+result_pca <- prcomp(pca_data_2[,-5], center=TRUE, scale=TRUE)
+summary(result_pca)
+fviz_eig(result_pca, addlabels = TRUE)
+
+
+### Determine the number of PCs that are interesting for explaining the variability in the data
+# Kaiser criteria: keeping components where the eigenvalue > 1
+get_eigenvalue(result_pca)
+fviz_eig(result_pca, choice = "eigenvalue", addlabels = TRUE)
+screeplot(result_pca, type="line", main = "Scree Plot")#similar to an elbowplots, if close to zero this PC might not be as interesting. 
+
+### Determining to which extend each variable is correlated with/contributing to a certain component or c
+# Obtain loading from the result_pca object: coefficients 
+loadings <- as.data.frame(result_pca$rotation)
+# Visualizing how the variables contribute to the first two PCs
+fviz_pca_var(result_pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+
+### Visualizing the PCA 
+# samples/individuals with similar profiles are grouped together 
+fviz_pca_ind(result_pca,
+             repel = TRUE     # Avoid text overlapping
+             )
+
+
+### visualizing both individuals and variables among the first two PCs
+# Using the fviz_pca_biplot(function from factoextra
+fviz_pca_biplot(result_pca, repel = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+
+### running statistics for comparisons of interest
+PCA_restuls_data_frame <- as.data.frame(result_pca$x)
+PCA_restuls_data_frame<- cbind(PCA_restuls_data_frame, pca_data_2)
+
+t.test(PCA_restuls_data_frame[PCA_restuls_data_frame$treatment == "chemo", 'PC1'],PCA_restuls_data_frame[PCA_restuls_data_frame$treatment == "immuno" ,'PC1'])
+
+
+### Customizing the PCA plot
+# For example coloring samples/individuals per group using the "habillage' argument
+# You can for example use the categorical data column from the pca_data_2 data frame 
+# For additional customization options see <http://www.sthda.com/english/wiki/fviz-pca-quick-principal-component-analysis-data-visualization-r-software-and-data-mining>
+test <- fviz_pca_ind(result_pca,
+             habillage = pca_data_2$treatment,
+             repel= TRUE ,# color by group
+             invisible = "quali" # don't show the "mid-point" for each group
+             )
+
+
+```
+#-----------------------------------------------------------#
+## General introduction to creating graphics using ggplot2 ##
+#-----------------------------------------------------------#
+
+```{r}
+# See also the Data Visualisation chapter in R for Data science  < https://r4ds.had.co.nz/data-visualisation.html > for explanations and examples are form  =
+
+### Load the required packages
+#install.packages("ggplot2")
+library(ggplot2)
+
+### You supply a dataset to ggplot() which will crate a coordinate system that you can add layers to
+# To specify which visual object to use to represent the data you specify a geom function
+# Each geom function takes a mapping argument using aes(), which defines how variables in the dataset are mapped to visual propertied
+# See example below that creates a dot plot from the example_dataset, with column_1 and Cclumn_2 columns as the x and y axis respectively
+# The dots are colored by the column_3 column
+ggplot(example_dataset) + 
+  geom_point(mapping= aes(x= column_1, y= column_2, color = column_3))
+
+# There are multiple geom functions to represent the data (> 40 and even more using extension packages)
+# For a comprehensive overview use the ggplot cheatsheet (https://rstudio.github.io/cheatsheets/html/data-visualization.html) 
+# geom_point() -> dot plot
+# geom_smooth() -> a smooth line fitted to the data
+# geom_bar() -> basic bar chart
+
+### To map an aesthetic to a variable, assign the name of the variable (dataset column) to the aesthetic inside aes()
+# ggplot2 will assign a unique level to each unique value of the variable assigned to a aesthetic (a processes called scaling) 
+# and adds a legend explaining which level corresponds to each value
+# Examples of aesthetics that can be added inside the aes():
+# size = column_3 (ggplot will only use six shapes a a time)
+# color = column_3
+# shape = column_3
+# alpha = column_3 (controls the transparency of the points/lines)
+# linetype = column_3  
+
+# Troubleshooting=
+# Not every aestethic works with every geom function
+# You can set the shape of a point, but not the shape of a line
+
+### You can also set the aesthetic manually (so without variables of the dataset being involved)
+# To do this set the aesthetic by name outside the aes() function
+# In the example below, a dotplot from the mpg dataset is created with displ and hwy as the x and y axis respectively
+# All dots are colored blue
+ggplot(data = example_dataset) + 
+  geom_point(mapping = aes(x = column_1, y = column_2), color = "blue")
+
+# Troubleshooting= 
+# Make sure the + sign is always at the end of a line, never at the start
+
+### When working with (a) categorical variable(s) you can split your plot into facets (subplots)
+# You can facet your plot by a single variable -> facet_wrap() or by the combination of two -> facet_grid()
+# For facet_wrap() the first argument should be a ~ followed by a variable name facet_wrap(~ column_3)
+# For facet_grid() the first argument is two variable names separated by a ~ facet_grid(column_3 ~ column_4)
+# In the example below, a dotplot from the example_dataset is created with column_1 and column_2 as the x and y axis respectively
+# Each unique value in the variable column_3 has its own subplot
+ggplot(data = example_dataset) + 
+  geom_point(mapping = aes(x = column_1, y = column_2)) + 
+  facet_wrap(~ column_3)
+
+
+### You can display multiple geoms in the same plot by adding multiple geom functions
+# For example a smooth line through a set of data points
+ggplot(data = mpg) + 
+  geom_point(mapping = aes(x = displ, y = hwy)) +
+  geom_smooth(mapping = aes(x = displ, y = hwy))
+# Or if you want to avoid typing the aes() twice 
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point() + 
+  geom_smooth()
+# Placing the mappings argument in the separate geom functions makes it possible to display different aesthetics in different layers
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point(mapping = aes(color = class)) + 
+  geom_smooth()
+# Or even selecting only a subset of the data to be plotted in a specific layer 
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point(mapping = aes(color = class)) + 
+  geom_smooth(data = filter(mpg, class == "subcompact"))
+
+
+### Bar charts
+# Bar charts like, histograms and frequency polygons, bin the data and calculate the number of point that fall in each bin
+# In other words it will calculate new values to plot
+# Whereas a scaterplot only plot the raw values available in the dataset
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut))
+# If you have a data frame with a column stating the frequency for each category you can override the default stat (count) and set it to "identiy"
+# You can now specify the x and y axis 
+ggplot(data = demo) +
+  geom_bar(mapping = aes(x = cut, y = freq), stat = "identity")
+# You might want the proportions instead of counts
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut, y = stat(prop), group = 1))
+# see also the complete list of stats in the ggplot2 cheatsheet
+
+### Changing the Bar charts aestethics 
+# You can use the fill argument to color a bar chart, either using the same variable name as the x axis or another variable
+# In case you specify another variable, the bars will be automaticaly stacked
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut, fill = clarity))
+# If you don't want the bars to be stacked you can set the postion argument
+# "identity" -> each object will be placed exaclty where it falls int he context of the graph (in case of bars it will cause them to overlap)
+# "fill" -> similar to stakcing, but makes the stacked bars the same height
+# "dodge" -> placing overlapping objects beside one another 
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut, fill = clarity), position = "dodge")
+
+
+# There is another positional argument but it is not useful for bar charts, but can be very useful for scaterplots
+# Points are rounded so they appear on a grid causing some points to overlap, it might cause you to miss some information about the distribution of the data points
+# "jitter" -> adds random noise to each point, causing the points to spread because no two points are likely to receive the same amount of random noise
+
+
+### working with different coordinate systems
+# By default the x and y position act independently to determine the location of each point
+# There are some coordinate systems that might occasional be helpful
+# coord_flip() -> switches the x and y axis (useful for long labels)
+# coord_polar() -> uses polar coordinates (each bar is a piece of a pie)
+
+```
+
+
+## Bubble plot ##
+A bubble plot is a type of scatter plot with (aside from the x and y axis) a third dimension or even a forth dimension added to it by assigning a data variable to the dot size and dot color
+```{r}
+### Load the required packages
+#install.packages("ggplot2")
+
+library(ggplot2)
+
+### Upload the data
+# This should be a data frame with column names where each row corresponds to a different variable 
+bubble_data<- read.table('/path/to/datafile.txt',sep="\t", header=T) # or an excel, .tsv, .csv or other file 
+# An example of a data frame 
+bubble_data <- as.data.frame(list(patients = c("patient_1","patient_2","patient_3","patient_4","patient_5","patient_6","patient_7"),
+                   treatment= c("radiation",	"chemo",	"immuno",	"immuno",	"chemo",	"chemo",	"immuno"),
+                   distance_to_hospital_in_km = c( 8.7, 20.3, 17.5, 2.7, 35.4, 12.5, 15.0),
+                   age =c(29,	53,	47,	63,	83,	37,	57),
+                   number_of_treatments= c(1,5,3,2,2,5,3)))
+
+
+### Create the bubble plot
+# Use the geom_point() function from ggplot2
+# There are no rules about which type of variable should be represented by which dimensions, it depends on your preference
+ggplot(bubble_data, aes(x= distance_to_hospital_in_km ,y = patients)) + # Specifying the variables represented on the x and y-axis 
+  geom_point(aes( size = age, fill = treatment), shape = 21) # Specifying the variables represented by the size and the fill color (=fill) of the dots
+# Without specifying the colors for the "fill" variable, a random color pallet will be assigned (discreet or continuous depending on the variable) 
+# With the shape argument set to 21, the dots can be assigned an outline color and a fill color
+# An outline color can be set using the color argument in the aes() of geom_point()
+
+### Customizing the bubble plot
+# Because the dotplot is created using ggplot there are lost of customization options
+# A few options are shown below
+# For any very specific customization wishes look at the ggplot documentations online
+ggplot(bubble_data, aes(x= distance_to_hospital_in_km ,y = patients)) +  
+  geom_point(aes( size = age, fill = treatment), shape = 21) +
+  xlab("distance_to_hospital_in_km")+ # Specifying the x-axis labels 
+  ylab("patients") + # Specifying the y-axis labels 
+  scale_fill_manual(values=c("green", "purple", "orange"))+ # Setting the colors for a discreet "fill" variable
+  #scale_fill_gradient2(low = "blue", mid= "white", high = "red") +  # Setting three colors for a continuous color pallet for the "fill" variable
+  #scale_fill_gradient(low = "blue",  high = "red") +  # Setting two colors for a continuous color pallet for the "fill" variable 
+  #theme_bw() + # creating a figure with grid lines
+  theme_classic()+ # creating a figure without grid lines
+  theme(panel.background = element_rect(colour = "black")) +
+  theme(axis.text.x = element_text(colour = "black", # Specify the x-axis text formatting
+                                   size = 10,
+                                   face = "bold",
+                                   angle = 0,
+                                   vjust = 0.3,
+                                   hjust = 1)) +
+  theme(axis.text.y = element_text(colour = "black",  # Specify the x-axis text formatting
+                                   face = "bold",
+                                   hjust = 1,
+                                   size = 8,
+                                   vjust = 0.5)) +
+  #scale_x_continuous(limits = c(2, 6)) # set the limits for a continuous x-axis
+  #scale_y_continuous(limits = c(2, 6)) # set the limits for a continuous y-axis
+  #scale_x_discrete(limits = "vector of names") # set the order of a discreet x-axis
+  scale_y_discrete(limits = c("patient_2","patient_3","patient_1","patient_4","patient_7", "patient_5","patient_6")) # Set the order of a discreet y-axis
+
+``` 
+#------------#
+## Bar plot ##
+#------------#
+A bar plot presents categorical data using rectangular bars with heights or lengths proportional to the values they represent
+```{r}
+### Load the required packages
+#install.packages("ggplot2")
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+### Upload the data
+# This should either be a data frame where each column corresponds to a different variable (1)
+# Or a data frame where each column represents another sample, but the variable represented in the columns is the same (2)
+bar_data<- read.table('/path/to/datafile.txt',sep="\t", header=T) # or an excel, .tsv, .csv or other file 
+# Example of these data frames 
+bar_data_1 <- data.frame(patients = c("patient_1","patient_2","patient_3","patient_4"),
+                         treatment= c("radiation",	"chemo",	"immuno",	"immuno"),
+                         age =c(29,	53,	47,	63))
+                   
+bar_data_2 <-data.frame(genes = c('GENE1', 'GENE2', 'GENE3', 'GENE4','GENE5'),
+                           Sample_1_r1 =c(1.2690,2.3462,3.4898,4.3693,5.1236),
+                           Sample_1_r2 =c(0.5356,3.3460,3.3577,4.3688,5.4371),
+                           Sample_2_r1 =c(1.0082,5.4990,3.4634,5.1371,5.8368),
+                           Sample_2_r2 =c(3.6594,4.8532,3.2356,5.9435,5.6477))
+
+### Create the bar plot
+# (1) From a data frame where each column corresponds to a different variable (long table)
+# Using the fill argument you can color the bars based on a (discreet) variable (color are assigned randomly)
+ggplot(bar_data_1)+
+  geom_bar(mapping =aes(x= patients, y=age, fill=treatment ), stat= "identity")
+
+# (2) From a data frame where each column represents the same variable  (wide table)
+# For a bar plot you need a long table with each variable in its own column
+# A wide table can be converted to a long one using the pivot_longer function from tidyr
+# pivot_longer(data, c(column to include in column names column), names_to = "name_of_new_column_names_column", values_to = "name_of_new values_column")
+# Instead of columns to include, you can also specify the column name(s) to exclude in the column names column, see example -c("genes")
+converted_long_data_table <- pivot_longer(bar_data_2, -c("genes"), names_to = "Sample_ID", values_to= "gene_expression")
+# When creating a barplot with error bars you need a table with the summarized values (mean and sd) of a variable of interest
+# If you have multiple variables you want to summarize on (in the example: genes and sample_ID) combine the columns into one column, summarize based on this column and split the column afterwards
+converted_long_data_table$Sample_ID <- gsub("_r[1-9]", "", converted_long_data_table$Sample_ID ) # Changing the values to "Sample_1" and "Sample2"
+converted_long_data_table$combined_column<- paste0(converted_long_data_table$genes , ".", converted_long_data_table$Sample_ID) # Combine the columns, value separated by a (.) dot
+summarized_table<-  converted_long_data_table %>% group_by(combined_column) %>% summarize(mean = mean(gene_expression), sd(gene_expression))
+summarized_table<- summarized_table %>% separate(combined_column, into=c("genes", "Sample_ID"), sep="\\.") # split the combined column back into the original columns
+
+ggplot(summarized_table, aes(x= genes , y = mean, fill= Sample_ID)) +
+  geom_bar(stat = "identity", position = position_dodge())+
+  geom_errorbar(aes( ymin=mean-`sd(gene_expression)`, ymax=mean+`sd(gene_expression)`), width=.2,
+                 position=position_dodge(.9)) 
+
+###customizing the bar plot 
+# Because the bar plot is created using ggplot there are lost of customization options
+# A few options are shown below
+# For any very specific customization wishes look at the ggplot documentations online
+ggplot(summarized_table, aes(x= genes , y = mean, fill= Sample_ID)) +
+  geom_bar(stat = "identity", position = position_dodge())+
+  geom_errorbar(aes( ymin=mean-`sd(gene_expression)`, ymax=mean+`sd(gene_expression)`), width=.2,
+                 position=position_dodge(.9))  +
+  coord_cartesian(ylim=c(1,6)) + # zoom in on a specific part of the bar plot by setting the y axis coordinates
+  guides(fill=guide_legend(title="Samples"))+ # Chagne the legend title 
+  #coord_flip() + # flipping the axis 
+  theme_classic()+ # creating a figure without grid lines
+  #theme_bw() + # creating a figure with grid lines
+  #theme(axis.line = element_line(colour = "black"), ## specifyin options about the figure backgorund
+  #       panel.grid.major = element_blank(),
+  #       panel.grid.minor = element_blank(),
+  #       panel.border = element_blank(),
+  #       panel.background = element_blank()) +
+  # xlab("x_axis_label")+ # Specifying the x-axis labels 
+  ylab("gene_expression") + # Specifying the y-axis labels 
+  scale_fill_manual(values=c( "purple", "orange"))+ # Setting the colors for a discreet "fill" variable
+  theme(axis.text.x = element_text(colour = "black", # Specify the x-axis text formatting
+                                   size = 10,
+                                   face = "bold",
+                                   angle = 0,
+                                   vjust = 0.3,
+                                   hjust = 1)) +
+  theme(axis.text.y = element_text(colour = "black",  # Specify the x-axis text formatting
+                                   face = "bold",
+                                   hjust = 1,
+                                   size = 8,
+                                   vjust = 0.5)) 
+  #scale_x_discrete(limits = "vector of names") # set the order of a discreet x-axis
+  #scale_y_discrete(limits = vector of names") # Set the order of a discreet y-axis
+
+```
+
+#------------#
+## box plot ##
+#------------#
+A box plot graphically summarizes a set of data by displaying the minimum, first quartile, median third quartile and maximum as well as possible outliers 
+```{r}
+### Load the required packages
+#install.packages("tidyr")
+library(tidyr)
+library(ggplot2)
+
+### Upload the data
+# This should be a data frame containing multiple data entries for the same variable, oftentimes the entries are grouped
+# This data frame can be a long table where each column corresponds to a different variable 
+# Or a wide table where each column represents the same variable
+box_data<- read.table('/path/to/datafile.txt',sep="\t", header=T) # or an excel, .tsv, .csv or other file 
+# Example of a wide table (where gene expression data is grouped per sample (columns) and per gene(rows))
+box_data_wide <-data.frame(genes = c('GENE1', 'GENE2', 'GENE3',
+                                     'GENE4','GENE5'),
+                           Sample_1_r1 =c(1.2690,2.3462,3.4898,4.3693,5.1236),
+                           Sample_1_r2 =c(0.5356,3.3460,3.3577,4.3688,5.4371),
+                           Sample_2_r1 =c(1.0082,5.4990,3.4634,5.1371,5.8368),
+                           Sample_2_r2 =c(3.6594,4.8532,3.2356,5.9435,5.6477))
+# To create the box plot itself the table needs to be in a long format
+# A wide table can be converted to a long one using the pivot_longer function from tidyr
+# pivot_longer(data, c(column to include in column names column), names_to = "name_of_new_column_names_column", values_to = "name_of_new values_column")
+# Instead of columns to include, you can also specify the column name(s) to exclude in the column names column, see example -c("genes")
+box_data_long <- pivot_longer(box_data_wide, -c("genes"), names_to = "Sample_ID", values_to= "gene_expression")
+
+
+### Create the boxplot
+box_data_long$Sample_ID <- gsub("_r[1-9]", "", box_data_long$Sample_ID ) # Changing the values to "Sample_1" and "Sample2"
+
+ggplot(box_data_long) +
+  geom_boxplot(aes(x= Sample_ID , y = gene_expression, fill=genes) )+
+  theme_classic()
+  #scale_x_discrete(guide = guide_axis(angle = 90)) # Set the x-axis labeling at a 90 degree angle 
+
+
+
+```
+#------------------#
+## color palettes ##
+#------------------#
+Changing the color schemes of figures
+```{r}
+### Load the required packages
+#install.packages("circlize")
+library(circlize)
+library(RColorBrewer)
+
+### The colorRamp2() function of the circlize package 
+# Generates a color mapping from a vector of break values and a vector of corresponding colors 
+# The color mapping can be used as input for a a color argument when creating a figure 
+# see examples below
+colors_mapping1= colorRamp2(c(-2, 0, 2), c("yellow", "white", "darkblue")) 
+colors_mapping2= colorRamp2(c(-2, 0, 2), c("#000004", "#57106e", "#bc3754", "#f98e09", "#fcffa4")) 
+# Or the RColorBrewer package which contains ready to use color palettes 
+# The palette can be extraceted using the brewer.pal() function and used as input for a a color argument when creating a figure 
+
+display.brewer.all(colorblindFriendly = TRUE) #display the available palettes
+colors_heatmap_3=brewer.pal(5,"PRGn")
+
+
+
+```
+
+
+
+
+
+

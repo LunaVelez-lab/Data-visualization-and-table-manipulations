@@ -1,0 +1,280 @@
+---
+title: "modifying data frames"
+owner: "Luna-Velez-lab" 
+output: html_document
+date: "2023-08-22"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+This is a R Markdown file containing simplified code and code examples for modifying/manipulating data frames. (for example reorganizing, filtering, renaming rows and colums, adding additional data).It is a collection place for all sorts of tricks and tips for working with data frames.
+Use ctrl+f when you want to find something specific.
+
+This workflow has been created using our data as example. When you want to use this workflow for your own analysis you will need to change parts of the code to make it fit your data. 
+This includes: 
+- Changing file/folder paths 
+- Changing file names 
+
+
+
+#setting up the working/results directory for all code chunks in the R markdown
+When saving results of the pipeline they can be found in this directory 
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = normalizePath("/path/to/results_modifying_tables_directory/"))
+```
+
+
+#------------------------#
+## Basics manipulations ##
+#------------------------#
+
+### Loading the example dataset
+```{r}
+### Load the data 
+# Change the "path/to/data.txt" so it states the path to where the data it is saved on your computer
+# With the "sep" argument you can specify what delimiter is used to separate the different columns (often either spaces ("\s"), tabs ("\t"), or commas (","))
+# When the first row in you data contains the column names set the "header" argument to TRUE (otherwise it needs to be FALSE)
+# When the first column in your data contains the row names the "row.name" argument needs to be set to 1 (otherwise set the argument to NULL)
+data <- read.table( "path/to/table_for_manipulation_in_r.txt", row.names = 1, header = TRUE)
+
+### Example data 
+# Or run the lines below to create the same data frame directly in R
+data <- as.data.frame(list(patients = c("patient_1","patient_2","patient_3","patient_4","patient_5","patient_6","patient_7","patient_8","patient_a1","patient_a2","patient_a3","patient_a4"),
+                   treatment= c("radiation",	"chemo",	"immuno",	"immuno",	"chemo",	"chemo",	"immuno",	"radiation",	"radiation",	"chemo",	"immuno",	"radiation"),
+                   age =c(29,	53,	47,	63,	83,	37,	57,	68,	95,	80,	89,	25),
+                   surgery	= c("yes","no","no","no","yes","yes","no","yes","no","no","no","no"),
+                   treatment_cost= c(800,	600,1000,1000,600,600	,1000,800,800,600,1000,	800),
+                   number_of_treatments= c(1,5,3,2,2,5,3,3,5,1,5,2)))
+# Assigning one column as row names
+rownames(data) <- data$patients
+# Assigning column names using a vector (=c() ) with names (if the data doesn't have column names or if you want to replace the current column names)
+colnames(data) <- c("patients",	"treatment",	"age",	"surgery",	"treatment_cost",	"number_of_treatments")
+
+```
+
+### Filtering or subsetting the data frame
+```{r cars}
+### Selecting only the rows and columns of interest 
+# The rows need to be specified before the comma and the columns after the comma in a vector (=c() ) construction which combines values into a vector or list ->  data[ c(row_selection) , c(columns_selection) ]
+# You can select based on positional numbers or names (row names/column names)
+data_subset_rows <- data[ c("patient_1" , "patient_2", "patient_3"), ]
+data_subset_columns2 <- data[, c(1,2)]
+# When you want to select multiple successive rows/columns you can specify this by the number of the first and last row of interest separated by a ":"
+# It is possible to select rows and columns of interest at the same time
+data_subset <- data[c("patient_1" , "patient_2") , c(1:2) ]
+# When selecting only one column the resulting data format will be a string without the row names
+# You can keep the data frame format and the row names by setting the drop argument to FALSE
+data_one_column <- data[, c(1), drop=FALSE ]
+
+### Removing rows and columns 
+# You can also remove rows and columns that are not of interest 
+# This can be done by specifying the row_selection and/or column_selection (by number in data[ c(row_selection) , c(columns_selection) ]
+# And putting a "-" in front of the c() construction
+data_rows_removed <- data[-c(1:2), ]
+
+### Filtering the data based on certain criteria
+# Selecting the data rows based on a character value: for example patients treated with chemo
+data_chemo <- data[data$treatmemt == "chemo" ,]
+# Selecting the data rows based on a numerical criteria: for example patients older than 80 years
+data_above_80 <- data[data$age > 80, ]
+# You can also select on multiple criteria
+data_filtered <- data[data$age > 80 & data$treatmemt == "chemo", ]
+# There are also other symbols you can use to set your criteria 
+# < (less than ), >= (more or equal), <= (less or equal), | (or)
+
+### Filtering the data based on a certain name pattern recognition
+# The grep function requires a pattern and the name of a vector or column name where the pattern can be found: grep("pattern", name_of_the_list)
+# It will return the positional numbers of the vector elements or rows in which the pattern was found 
+# In the example below a data frame is created with only the patients that have an "a" in their patient ID (see the row names of the data frame)
+data_pattern_of_interest <- data[grep("_a", rownames(data)),]
+
+```
+
+### Ordening the data frame 
+```{r}
+
+### Ordering the rows of a data frame based on the content of a column
+# In the example below the rows are reorder based on values in the age column 
+# When the "decreasing" argument is set to TRUE the rows are order based on the values from high to low (numerical) or from A to Z (alphabetical)
+data_order <- data[order(data$age, decreasing = TRUE), ]
+
+
+### reordering columns 
+# reorder based on column position or column names
+data_column_reordered <- data[,c(6,3,5,1,4,2)]
+
+```
+
+### Modifying character values 
+```{r}
+### Changing data values using name pattern recognition
+# Changing row names, column names or character values
+# In the example below the value "chemo" in the column treatment is changed to "chemotherapy"
+data$treatment <- gsub("chemo", "chemotherapy", data$treatment)
+
+```
+
+### Adding new information to the data frame 
+```{r}
+### Column calculations
+# Sometimes you might want to use the information from multiple columns to create new information
+# In the example below the treatment_cost column and the number_of_treatments column are multiplied with each other
+data$total_cost <- data$treatment_cost * data$number_of_treatments 
+# You can also do other calculations like dividing (/), adding up (+), subtracting (-)
+
+### Adding additionally information to the data frame based on a criteria 
+# using ifelse statements <- ifelse("If this criteria is TRUE", "do this", "otherwise do this")
+# The criteria can be for example be set using these symbols : < > (less than ,more than), >= (more or equal), <= (less or equal), | (or)
+# Or you can use a vector containing names together with the %in% command to find which rows of a specific column overlap with the names in the vector
+# In the example a column is added to the data frame which specifies from which cohort the patients are, patients with a letter in their patient ID are from cohort B all the others from cohort A
+patients_from_cohort_B <- c("patient_a1",	"patient_a2",	"patient_a3",	"patient_a4")
+data$cohort <- ifelse(rownames(data) %in% patients_from_cohort_B, "B" , "A" )
+# If for different criteria you want a different action you can couple multiple elseif statements  
+# ifelse("If this criteria is TRUE", "do this", ifelse("If this other criteria is TRUE", "do this", "otherwise do this"))
+
+
+### Adding rowsum and colsum 
+# Sometimes you might want to calculate the sum of of each row or each column 
+# All rows or column that you include in the analysis need to contain numerical data 
+# Example data used for this demonstration: 
+example_count_table <- as.data.frame(list(genes = c('GENE1', 'GENE2', 'GENE3', 'GENE4','GENE5'),
+                           patient1=c(10,22,38,43,56),
+                           patient2=c(5,30,37,48,51),
+                           patient3=c(12,50,34,21,58)))
+rownames(example_count_table) <- example_count_table$genes
+example_count_table <- example_count_table[2:4]
+
+total_per_gene <- rowSums(example_count_table)
+total_per_gene
+total_per_patient <- colSums(example_count_table)
+total_per_patient
+
+
+
+```
+
+
+#-------------------------------------------#
+## Preparing a dataframe for visualization ##
+#-------------------------------------------#
+
+### Modifying a data frame to create figures from it 
+```{r}
+### Converting a wide data frame to a long data frame (or vise versa)
+# Certain visualization methods require the data frame to be in a specific format
+# For example: to make a heatmap you need a wide data frame with each column representing the same data variable, for a barplot you need a long data frame with each variable in its own column 
+# Example data used for this demonstration: 
+example_wide_table <- as.data.frame(list(genes = c('GENE1', 'GENE2', 'GENE3', 'GENE4','GENE5'),
+                           patient1=c(10,22,38,43,56),
+                           patient2=c(5,30,37,48,51),
+                           patient3=c(12,50,34,21,58)))
+
+# To convert the data frame format from wide to long you can use the function pivot_longer() from the package tidyr
+# pivot_longer(data, c(column names to include in the column names column), names_to = name of the new column names column, values_to = name of the new values column)
+# You can also specify in the pivot_longer function which column name(s) to exclude in the column names column, see example -c("genes")
+library(tidyr)
+converted_long_data <- pivot_longer(example_wide_table, -c("genes"), names_to = "patients_ID", values_to= "gene_expression")
+# Or to convert the data frame format from long to wide you used the pivo_wider() function from tidyr
+# pivot_wider(data, names_from = column containing the new column names, values_from = column containing the new values)
+converted_wide_data <- pivot_wider(converted_long_data, names_from= "patients_ID", values_from = "gene_expression")
+
+### Transposing a data frame 
+# input can be a matrix or data frame, output will be a matrix
+transposed_table <- t(example_wide_table) 
+
+### summarizing a data frame with values to determine the mean and SD
+# If you want to create a barplot with error bars you need a data frame containing the summarized values (mean and sd values) per group
+# For the summarization you can use the group_by() and summarize() functions from dplyr
+# As input you need a data frame in long format (see ### Converting a wide data frame to a long data frame (or vise versa))
+library(dplyr)
+summerized_table<-  converted_long_data %>% group_by(genes) %>% summarize(mean = mean(gene_expression), sd(gene_expression))
+# If you have multiple variable to summarize on try this trick: combine the column variables into one column, group based on this column and split the column afterwards
+# data$combined_column<- paste0(data$column1 , ".", data$column2)
+# summarized_table<-  data %>% group_by(combined_column) %>% summarize(mean = mean(value_column), sd(value_column))
+# summarized_table_2_split<- summarized_table_2 %>% separate(combined_column, into=c("column1", "column2"), sep="\\.")
+
+```
+
+#--------------------------------------#
+## Working with 2 or more data frames ##
+#--------------------------------------#
+
+### Matching data frames
+```{r}
+### Selecting only certain rows or column of one data frame to match another data frame 
+# For this you can use the %in% operator, which checks if values of the first argument are present in the second argument 
+# Example data used for this demonstration: 
+data_short <- as.data.frame(list(patients = c("patient_a1","patient_a2","patient_a3","patient_a4"),
+                   treatment= c(	"radiation",	"chemo",	"immuno",	"radiation"),
+                   age =c(	95,	80,	89,	25)))
+
+data_long <- as.data.frame(list(patients = c("patient_6","patient_7","patient_8","patient_a1","patient_a2","patient_a3","patient_a4"),
+                   surgery	= c("yes","no","yes","no","no","no","no"),
+                   treatment_cost= c(600	,1000,800,800,600,1000,	800),
+                   number_of_treatments= c(5,3,3,5,1,5,2)))
+
+data_long_subset <- data_long[data_long$patients %in% data_short$patients, ]
+
+### Ordering a data frame based on another data frame 
+# For example when you have a metadata table that you want to link to your count table 
+# One column in the metadata table needs to correspond to the column names of the count_table
+# Example data used for this demonstration: 
+metadata <- as.data.frame(list(patients = c("patient_156438","patient_236449","patient_3547968","patient_4346981"),
+                   treatment= c("radiation",	"chemo",	"immuno",	"immuno"),
+                   age =c(29,	53,	47,	63)))
+rownames(metadata)<- metadata$patients
+
+count_table <- as.data.frame(list(genes = c('GENE1', 'GENE2', 'GENE3', 'GENE4','GENE5'),
+                           patient_236449=c(10,22,38,43,56),
+                           patient_4346981=c(5,30,37,48,51),
+                           patient_156438=c(12,50,34,21,58),
+                           patient_3547968=c(20,35,42,37,47)))
+rownames(count_table) <- count_table$genes
+count_table <- count_table[2:5]
+
+rownames(metadata) == colnames(count_table)  #FALSE
+# Ordering the row names based on the 
+metadata <- metadata[c(colnames(count_table)),] 
+rownames(metadata) == colnames(count_table)  #TRUE
+
+```
+
+### Combining data frames  
+```{r}
+# Example data used for this demonstration: 
+data1 <- as.data.frame(list(patients = c("patient_1","patient_2","patient_3","patient_4"),
+                   treatment= c("radiation",	"chemo",	"immuno",	"immuno"),
+                   age =c(29,	53,	47,	63)))
+                   
+
+data2 <- as.data.frame(list(patients = c("patient_1","patient_2","patient_3","patient_4"),
+                   surgery	= c("yes","no","no","no"),
+                   treatment_cost= c(800,	600,1000,1000),
+                   number_of_treatments= c(1,5,3,2)))
+
+data3 <- as.data.frame(list(patients = c("patient_5","patient_6","patient_7","patient_8","patient_a1","patient_a2","patient_a3","patient_a4"),
+                   treatment= c("chemo",	"chemo",	"immuno",	"radiation",	"radiation",	"chemo",	"immuno",	"radiation"),
+                   age =c(	83,	37,	57,	68,	95,	80,	89,	25)))
+                
+
+### Horizontal: pasting two data frames next to each other
+# Using cbind() -> combining two data frames where the row names and number of rows are identical 
+rownames(data1) <- data1$patients
+rownames(data2) <- data2$patients
+horizontal_combined_tabl <- cbind(data1, data2)
+# Using merge() -> combining two data frames based on one or more columns 
+# The "by" parameter is used to specify which column(s) to use when merging the data frames
+# By row name: by=0, by (a) common column(s): by= c("column _name")or by=c("column1","column2") 
+# By a column differently named in the two data frames:  by.x = "column1", by.y = "columnA"
+horizontal_combined_table_merged <- merge(data1, data2, by="patients" )
+# Additionally you can specify joining options with the "all"parameter
+# all=T : keep all (also the unmatching) rows of both data frames, all.x=T or all.y=T keep all rows of the first or second data frame respectively
+
+### Vertical : stacking data frames on top of each other
+# Using rbind() -> combining two data frames with identical number of column and column names 
+rbind(data1, data3)
+# Using bind_rows() function from dplyr -> combining multiple (>=2) data frames with unequal number of columns
+# Missing values are marked by NA
+bind_rows(data1, data_tale2, data3)
+```
